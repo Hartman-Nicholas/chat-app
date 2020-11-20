@@ -7,6 +7,7 @@ const $messageFormInput = $messageForm.querySelector("input")
 const $messageFormButton = $messageForm.querySelector("button")
 const $sendLocationButton = document.querySelector("#send-location")
 const $messages = document.querySelector("#messages")
+const $location = document.querySelector("#location")
 
 // Templates
 const messageTemplate = document.querySelector("#message-template").innerHTML
@@ -17,7 +18,16 @@ socket.on('message', (message) => {
     $messages.insertAdjacentHTML('beforeend', html({
         message
     }))
+})
 
+const locationTemplate = document.querySelector("#location-template").innerHTML
+
+socket.on("locationMessage", (url) => {
+    const html = Handlebars.compile(locationTemplate)
+
+    $location.insertAdjacentHTML("beforeend", html({
+        url
+    }))
 })
 
 $messageForm.addEventListener("submit", (e) => {
@@ -39,6 +49,8 @@ $messageForm.addEventListener("submit", (e) => {
     }) // for socket.emit first argument is linking name to server 2nd argument is for relaying the data
 
 })
+
+
 
 $sendLocationButton.addEventListener("click", () => {
 
