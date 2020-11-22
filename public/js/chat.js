@@ -1,3 +1,6 @@
+// Client
+
+
 const socket = io()
 
 // Elements
@@ -7,28 +10,85 @@ const $messageFormInput = $messageForm.querySelector("input")
 const $messageFormButton = $messageForm.querySelector("button")
 const $sendLocationButton = document.querySelector("#send-location")
 const $messages = document.querySelector("#messages")
-const $location = document.querySelector("#location")
+const $sidebar = document.querySelector("#sidebar")
+
 
 // Templates
 const messageTemplate = document.querySelector("#message-template").innerHTML
+const locationTemplate = document.querySelector("#location-template").innerHTML
+const sidebarTemplate = document.querySelector("#sidebar-template").innerHTML
+
+// Options
+const {
+    username,
+    room
+} = Qs.parse(location.search, {
+    ignoreQueryPrefix: true
+})
+
+const autoScroll = () => {
+
+    // New message element
+    const $newMessage = $messages.lastElementChild
+
+
+    // Height of the new message
+    const newMessageStyles = getComputedStyle($newMessage)
+    const newMessageMargin = parseInt(newMessageStyles.marginBottom)
+    const newMessageHeight = $newMessage.offsetHeight + newMessageMargin
+
+    //visible height
+    const visibleHeight = $messages.offsetHeight
+
+    // Height of messages container
+    const containerHeight = $messages.scrollHeight
+
+    // How far have I scrolled
+
+    const scrollOffset = $messages.scrollTop + visibleHeight
+
+    if (containerHeight - newMessageHeight <= scrollOffset) {
+        $messages.scrollTop = $messages.scrollHeight
+    }
+}
 
 socket.on('message', (message) => {
     const html = Handlebars.compile(messageTemplate)
 
     $messages.insertAdjacentHTML('beforeend', html({
-        message
+        username: message.username,
+        message: message.text,
+        createdAt: moment(message.createdAt).format("h:mm a")
     }))
+    autoScroll()
 })
 
-const locationTemplate = document.querySelector("#location-template").innerHTML
 
-socket.on("locationMessage", (url) => {
+socket.on("locationMessage", (locationMessage) => {
     const html = Handlebars.compile(locationTemplate)
 
-    $location.insertAdjacentHTML("beforeend", html({
-        url
+    $messages.insertAdjacentHTML("beforeend", html({
+        username: locationMessage.username,
+        url: locationMessage.url,
+        createdAt: moment(locationMessage.createdAt).format("h:mm a")
     }))
+    autoScroll()
 })
+
+socket.on("roomData", ({
+    room,
+    users
+}) => {
+    const html = Handlebars.compile(sidebarTemplate)
+    $sidebar.innerHTML = html({
+        room,
+        users
+    })
+})
+
+
+
+
 
 $messageForm.addEventListener("submit", (e) => {
     e.preventDefault()
@@ -36,8 +96,8 @@ $messageForm.addEventListener("submit", (e) => {
     $messageFormButton.setAttribute("disabled", "disabled")
     // disable
 
-    const chat = e.target.elements.message.value
-    socket.emit("submit", chat, (error) => {
+    const message = e.target.elements.message.value
+    socket.emit("sendMessage", message, (error) => {
         $messageFormButton.removeAttribute("disabled")
         $messageFormInput.value = ""
         $messageFormInput.focus()
@@ -72,4 +132,14 @@ $sendLocationButton.addEventListener("click", () => {
             console.log("Location shared successfully")
         })
     })
+})
+
+socket.emit("join", {
+    username,
+    room
+}, (error) => {
+    if (error) {
+        alert(error)
+        location.href = "/"
+    }
 })

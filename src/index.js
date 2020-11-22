@@ -1,9 +1,21 @@
+// server
+
 const express = require('express')
 const path = require("path")
 const hbs = require("hbs")
 const http = require("http")
 const socketIo = require('socket.io')
 const Filter = require('bad-words')
+const {
+    generateMessage,
+    generateLocationMessage
+} = require('./utils/messages')
+const {
+    addUser,
+    removeUser,
+    getUser,
+    getUsersInRoom
+} = require("./utils/users")
 
 const app = express()
 const server = http.createServer(app)
@@ -27,7 +39,14 @@ hbs.registerPartials(partialsPath)
 app.use(express.static(public))
 app.get("", (req, res) => {
     res.render("index", {
-        title: "Weather App",
+        title: "Chat App",
+        name: "Nicholas Hartman",
+    })
+})
+
+app.get("/chat", (req, res) => {
+    res.render("chat", {
+        title: "Chat App",
         name: "Nicholas Hartman",
     })
 })
@@ -36,28 +55,66 @@ app.get("", (req, res) => {
 io.on("connection", (socket) => {
     console.log("New websocket connection")
 
-    socket.emit("message", "Welcome!") //Broadcast to only the user
-    socket.broadcast.emit("message", "A new user has joined") //Broadcast to everyone but the user
+    socket.on("join", ({
+        username,
+        room
+    }, callback) => {
+        const {
+            error,
+            user
+        } = addUser({
+            id: socket.id,
+            username,
+            room
+        })
 
+        if (error) {
+            return callback(error)
+        }
 
-    socket.on("submit", (chat, callback) => {
+        socket.join(user.room)
+
+        socket.emit("message", generateMessage("Admin", "Welcome!")) //Broadcast to only the user
+        socket.broadcast.to(user.room).emit("message", generateMessage("Admin", `${user.username} has joined!`)) //Broadcast to everyone but the user
+        io.to(user.room).emit("roomData", {
+            room: user.room,
+            users: getUsersInRoom(user.room)
+        })
+
+        callback()
+
+    })
+
+    socket.on("sendMessage", (message, callback) => {
         const filter = new Filter()
+        const user = getUser(socket.id)
 
-        if (filter.isProfane(chat)) {
+        if (filter.isProfane(message)) {
             return callback("Profanity is not allowed!")
         }
-        io.emit("message", chat) // Broadcast to everyone including user
+        io.to(user.room).emit("message", generateMessage(user.username, message)) // Broadcast to everyone including user
         // for IO.emit first argument is "message" 2nd argument is information from client side
         callback()
     })
 
     socket.on("sendLocation", (coords, callback) => {
-        io.emit("locationMessage", `https://google.com/maps?=${coords.latitude},${coords.longitude}`)
+        const user = getUser(socket.id)
+        io.to(user.room).emit("locationMessage", generateLocationMessage(user.username, `https://google.com/maps?=${coords.latitude},${coords.longitude}`))
         callback()
     })
 
     socket.on("disconnect", () => {
-        io.emit("message", "A user has left")
+
+        const user = removeUser(socket.id)
+
+        if (user) {
+            io.to(user.room).emit("message", generateMessage("Admin", `${user.username} has left!`))
+            io.to(user.room).emit("roomData", {
+                room: user.room,
+                users: getUsersInRoom(user.room)
+            })
+        }
+
     })
 
 
